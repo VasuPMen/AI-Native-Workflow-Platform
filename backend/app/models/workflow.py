@@ -3,7 +3,8 @@ from sqlalchemy import (
     Integer,
     String,
     ForeignKey,
-    DateTime
+    DateTime,
+    JSON
 )
 from sqlalchemy.sql import func
 
@@ -28,6 +29,11 @@ class Workflow(Base):
 
     description = Column(
         String,
+        nullable=True
+    )
+
+    workflow_json = Column(
+        JSON,
         nullable=True
     )
 
