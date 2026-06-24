@@ -10,12 +10,20 @@ from app.schemas.workflow import (
     WorkflowResponse
 )
 
+from app.schemas.execution import (
+    WorkflowExecutionResponse
+)
+
 from app.services.workflow_service import (
     create_workflow,
     get_workflows,
     get_workflow,
     update_workflow,
     delete_workflow
+)
+
+from app.services.execution_service import (
+    execute_workflow
 )
 
 router = APIRouter(
@@ -25,7 +33,7 @@ router = APIRouter(
 
 
 @router.post(
-    "/",
+ "/",
     response_model=WorkflowResponse
 )
 def create_workflow_api(
@@ -96,6 +104,7 @@ def update_workflow_api(
 
     return workflow
 
+
 @router.delete("/{workflow_id}")
 def delete_workflow_api(
     workflow_id: int,
@@ -115,3 +124,25 @@ def delete_workflow_api(
     return {
         "message": "Workflow deleted successfully"
     }
+
+
+@router.post(
+    "/{workflow_id}/execute",
+    response_model=WorkflowExecutionResponse
+)
+def execute_workflow_api(
+    workflow_id: int,
+    db: Session = Depends(get_db)
+):
+    workflow = get_workflow(
+        db,
+        workflow_id
+    )
+
+    if workflow is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Workflow not found"
+        )
+
+    return execute_workflow(workflow)

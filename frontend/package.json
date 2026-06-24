@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@xyflow/react": "^12.11.0",
+    "axios": "^1.18.1",
     "browserslist": "^4.28.2",
     "caniuse-lite": "^1.0.30001799",
     "next": "16.2.9",

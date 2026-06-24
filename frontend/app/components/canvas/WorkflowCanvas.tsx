@@ -8,19 +8,23 @@ import {
 
 import { useEffect } from "react";
 
+import WorkflowListPanel from "../sidebar/WorkflowListPanel";
+
 import "@xyflow/react/dist/style.css";
 
 import { useWorkflowStore } from "../../store/workflowStore";
 
-import {
-  saveWorkflow,
-  loadWorkflow,
-} from "../../lib/localStorage";
+import { getWorkflow } from "../../services/workflowService";
+
+import { loadCurrentWorkflowId } from "../../lib/localStorage";
 
 import TopBar from "../topbar/TopBar";
 
 import StartNode from "../nodes/StartNode";
 import LLMNode from "../nodes/LLMNode";
+
+import TextInputNode from "../nodes/TextInputNode";
+import OutputNode from "../nodes/OutputNode";
 
 import NodeSidebar from "../sidebar/NodeSidebar";
 
@@ -29,6 +33,8 @@ import NodePropertiesPanel from "../panels/NodePropertiesPanel";
 const nodeTypes = {
   start: StartNode,
   llm: LLMNode,
+  text_input: TextInputNode,
+  output: OutputNode,
 };
 
 export default function WorkflowCanvas() {
@@ -58,47 +64,64 @@ export default function WorkflowCanvas() {
         state.setSelectedNodeId
     );
 
-
-
   const setSelectedEdgeId =
     useWorkflowStore(
       (state) =>
         state.setSelectedEdgeId
     );
 
+  const setWorkflow = useWorkflowStore(
+    (state) => state.setWorkflow
+  );
 
-  const setWorkflow =
+  const setCurrentWorkflow =
     useWorkflowStore(
-      (state) =>
-        state.setWorkflow
+      (state) => state.setCurrentWorkflow
     );
 
   useEffect(() => {
-    const workflow =
-      loadWorkflow();
+    const restoreWorkflow = async () => {
+      try {
+        const workflowId =
+          loadCurrentWorkflowId();
 
-    if (workflow) {
-      setWorkflow(
-        workflow.nodes || [],
-        workflow.edges || []
-      );
-    }
-  }, [setWorkflow]);
+        if (!workflowId) return;
 
-  useEffect(() => {
-    saveWorkflow(
-      nodes,
-      edges
-    );
-  }, [nodes, edges]);
+        const workflow =
+          await getWorkflow(
+            workflowId
+          );
+
+        setWorkflow(
+          workflow.workflow_json?.nodes ||
+            [],
+          workflow.workflow_json?.edges ||
+            []
+        );
+
+        setCurrentWorkflow(
+          workflow.id,
+          workflow.name
+        );
+      } catch (error) {
+        console.error(
+          "Failed to restore workflow",
+          error
+        );
+      }
+    };
+
+    restoreWorkflow();
+  }, [setWorkflow, setCurrentWorkflow]);
 
   return (
     <div className="flex">
+      <WorkflowListPanel />
       <NodeSidebar />
 
       <div
+        className="flex-1"
         style={{
-          width: "calc(100vw - 544px)",
           height: "100vh",
         }}
       >
@@ -117,13 +140,10 @@ export default function WorkflowCanvas() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
-            onSelectionChange={({ nodes, edges }) => {
-              console.log(
-                "SELECTION",
-                nodes,
-                edges
-              );
-
+            onSelectionChange={({
+              nodes,
+              edges,
+            }) => {
               if (nodes.length > 0) {
                 setSelectedNodeId(
                   nodes[0].id

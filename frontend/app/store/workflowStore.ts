@@ -16,8 +16,25 @@ interface WorkflowStore {
   edges: Edge[];
 
   selectedNodeId: string | null;
-
   selectedEdgeId: string | null;
+
+  currentWorkflowId: number | null;
+  currentWorkflowName: string;
+  workflowListRefreshKey: number;
+
+  workflowExecutionResult: string;
+
+  isWorkflowDirty: boolean;
+
+  setWorkflowDirty: (
+    value: boolean
+  ) => void;
+
+  setWorkflowExecutionResult: (
+    result: string
+  ) => void;
+
+  clearWorkflowExecutionResult: () => void;
 
   onNodesChange: (
     changes: NodeChange[]
@@ -65,6 +82,19 @@ interface WorkflowStore {
     nodes: Node[],
     edges: Edge[]
   ) => void;
+
+  setCurrentWorkflow: (
+    id: number | null,
+    name: string
+  ) => void;
+
+  setCurrentWorkflowName: (
+    name: string
+  ) => void;
+
+  clearCurrentWorkflow: () => void;
+
+  triggerWorkflowListRefresh: () => void;
 }
 
 export const useWorkflowStore =
@@ -72,34 +102,13 @@ export const useWorkflowStore =
     nodes: [
       {
         id: "1",
-
         type: "start",
-
         position: {
           x: 100,
           y: 100,
         },
-
         data: {
           name: "Start Node",
-        },
-      },
-
-      {
-        id: "2",
-
-        type: "llm",
-
-        position: {
-          x: 450,
-          y: 100,
-        },
-
-        data: {
-          name: "LLM Node",
-          model: "gpt-4o",
-          prompt: "",
-          temperature: 0.7,
         },
       },
     ],
@@ -107,57 +116,64 @@ export const useWorkflowStore =
     edges: [],
 
     selectedNodeId: null,
-
     selectedEdgeId: null,
 
-onNodesChange: (changes) =>
-  set((state) => ({
-    ...state,
+    currentWorkflowId: null,
+    currentWorkflowName:
+      "Untitled Workflow",
+    workflowListRefreshKey: 0,
 
-    nodes: applyNodeChanges(
-      changes,
-      state.nodes
-    ),
-  })),
+    workflowExecutionResult: "",
 
-onEdgesChange: (changes) =>
-  set((state) => ({
-    ...state,
+    isWorkflowDirty: false,
 
-    edges: applyEdgeChanges(
-      changes,
-      state.edges
-    ),
-  })),
+    onNodesChange: (changes) =>
+      set((state) => ({
+        ...state,
+        nodes: applyNodeChanges(
+          changes,
+          state.nodes
+        ),
+        isWorkflowDirty: true,
+      })),
 
-onConnect: (connection) =>
-  set((state) => {
-    const alreadyExists =
-      state.edges.some(
-        (edge) =>
-          edge.source ===
-            connection.source &&
-          edge.target ===
-            connection.target
-      );
+    onEdgesChange: (changes) =>
+      set((state) => ({
+        ...state,
+        edges: applyEdgeChanges(
+          changes,
+          state.edges
+        ),
+        isWorkflowDirty: true,
+      })),
 
-    if (alreadyExists) {
-      alert(
-        "Connection already exists"
-      );
+    onConnect: (connection) =>
+      set((state) => {
+        const alreadyExists =
+          state.edges.some(
+            (edge) =>
+              edge.source ===
+                connection.source &&
+              edge.target ===
+                connection.target
+          );
 
-      return state;
-    }
+        if (alreadyExists) {
+          alert(
+            "Connection already exists"
+          );
+          return state;
+        }
 
-    return {
-      ...state,
-
-      edges: addEdge(
-        connection,
-        state.edges
-      ),
-    };
-  }),
+        return {
+          ...state,
+          edges: addEdge(
+            connection,
+            state.edges
+          ),
+          isWorkflowDirty: true,
+        };
+      }),
 
     addNode: (type) =>
       set((state) => {
@@ -171,145 +187,113 @@ onConnect: (connection) =>
           alert(
             "Only one Start Node is allowed"
           );
-
-          return {};
+          return state;
         }
 
         return {
+          ...state,
           nodes: [
             ...state.nodes,
             {
               id: crypto.randomUUID(),
-
               type,
-
               position: {
                 x:
                   200 +
-                  state.nodes.length *
-                  50,
-
+                  state.nodes.length * 50,
                 y:
                   200 +
-                  state.nodes.length *
-                  50,
+                  state.nodes.length * 50,
               },
-
               data:
                 type === "llm"
                   ? {
-                    name:
-                      "LLM Node",
-
-                    model:
-                      "gpt-4o",
-
-                    prompt: "",
-
-                    temperature:
-                      0.7,
-                  }
-                  : {
-                    name:
-                      "Start Node",
-                  },
+                      name: "LLM Node",
+                      model: "gpt-4o",
+                      prompt: "",
+                      temperature: 0.7,
+                    }
+                  : type === "text_input"
+                    ? {
+                        name: "Text Input",
+                        text: "",
+                      }
+                    : type === "output"
+                      ? {
+                          name: "Output Node",
+                        }
+                      : {
+                          name: "Start Node",
+                        },
             },
           ],
+          isWorkflowDirty: true,
         };
       }),
 
-setSelectedNodeId: (
-  nodeId
-) => {
-  console.log(
-    "BEFORE",
-    useWorkflowStore.getState()
-      .selectedNodeId
-  );
+    setSelectedNodeId: (
+      nodeId
+    ) => {
+      set({
+        selectedNodeId: nodeId,
+        selectedEdgeId: null,
+      });
+    },
 
-  set({
-    selectedNodeId: nodeId,
-    selectedEdgeId: null,
-  });
+    setSelectedEdgeId: (
+      edgeId
+    ) => {
+      set({
+        selectedEdgeId: edgeId,
+        selectedNodeId: null,
+      });
+    },
 
-  console.log(
-    "AFTER",
-    useWorkflowStore.getState()
-      .selectedNodeId
-  );
-},
+    deleteNode: (nodeId) =>
+      set((state) => {
+        const node =
+          state.nodes.find(
+            (n) => n.id === nodeId
+          );
 
-setSelectedEdgeId: (
-  edgeId
-) => {
-  console.log(
-    "BEFORE EDGE",
-    useWorkflowStore.getState()
-      .selectedEdgeId
-  );
+        if (
+          node?.type === "start"
+        ) {
+          alert(
+            "Start Node cannot be deleted"
+          );
+          return state;
+        }
 
-  set({
-    selectedEdgeId: edgeId,
-    selectedNodeId: null,
-  });
+        return {
+          ...state,
+          nodes:
+            state.nodes.filter(
+              (node) =>
+                node.id !== nodeId
+            ),
+          edges:
+            state.edges.filter(
+              (edge) =>
+                edge.source !== nodeId &&
+                edge.target !== nodeId
+            ),
+          selectedNodeId: null,
+          selectedEdgeId: null,
+          isWorkflowDirty: true,
+        };
+      }),
 
-  console.log(
-    "AFTER EDGE",
-    useWorkflowStore.getState()
-      .selectedEdgeId
-  );
-},
-
-deleteNode: (nodeId) =>
-  set((state) => {
-    const node =
-      state.nodes.find(
-        (n) => n.id === nodeId
-      );
-
-    if (
-      node?.type === "start"
-    ) {
-      alert(
-        "Start Node cannot be deleted"
-      );
-
-      return state;
-    }
-
-    return {
-      nodes:
-        state.nodes.filter(
-          (node) =>
-            node.id !== nodeId
-        ),
-
-      edges:
-        state.edges.filter(
-          (edge) =>
-            edge.source !==
-              nodeId &&
-            edge.target !==
-              nodeId
-        ),
-
-      selectedNodeId:
-        null,
-
-      selectedEdgeId:
-        null,
-    };
-  }),
     deleteEdge: (edgeId) =>
       set((state) => ({
+        ...state,
         edges:
           state.edges.filter(
             (edge) =>
               edge.id !== edgeId
           ),
-
-        selectedEdgeId:
-          null,
+        selectedEdgeId: null,
+        isWorkflowDirty: true,
       })),
 
     updateNodeData: (
@@ -317,39 +301,34 @@ deleteNode: (nodeId) =>
       data
     ) =>
       set((state) => ({
+        ...state,
         nodes:
-          state.nodes.map(
-            (node) =>
-              node.id ===
-                nodeId
-                ? {
+          state.nodes.map((node) =>
+            node.id === nodeId
+              ? {
                   ...node,
-
                   data: {
                     ...node.data,
                     ...data,
                   },
                 }
-                : node
+              : node
           ),
+        isWorkflowDirty: true,
       })),
 
     setWorkflow: (
       nodes,
       edges
-    ) => {
-      console.log(
-        "SET WORKFLOW CALLED"
-      );
-
-      set({
+    ) =>
+      set((state) => ({
+        ...state,
         nodes,
         edges,
-
         selectedNodeId: null,
         selectedEdgeId: null,
-      });
-    },
+        isWorkflowDirty: false,
+      })),
 
     mergeWorkflow: (
       importedNodes,
@@ -357,17 +336,13 @@ deleteNode: (nodeId) =>
     ) =>
       set((state) => {
         const idMap =
-          new Map<
-            string,
-            string
-          >();
+          new Map<string, string>();
 
         const remappedNodes =
           importedNodes
             .filter(
               (node) =>
-                node.type !==
-                "start"
+                node.type !== "start"
             )
             .map((node) => {
               const newId =
@@ -381,15 +356,11 @@ deleteNode: (nodeId) =>
               return {
                 ...node,
                 id: newId,
-
                 position: {
                   x:
-                    node.position.x +
-                    100,
-
+                    node.position.x + 100,
                   y:
-                    node.position.y +
-                    100,
+                    node.position.y + 100,
                 },
               };
             });
@@ -407,31 +378,79 @@ deleteNode: (nodeId) =>
             )
             .map((edge) => ({
               ...edge,
-
-              id:
-                crypto.randomUUID(),
-
-              source:
-                idMap.get(
-                  edge.source
-                )!,
-
-              target:
-                idMap.get(
-                  edge.target
-                )!,
+              id: crypto.randomUUID(),
+              source: idMap.get(
+                edge.source
+              )!,
+              target: idMap.get(
+                edge.target
+              )!,
             }));
 
         return {
+          ...state,
           nodes: [
             ...state.nodes,
             ...remappedNodes,
           ],
-
           edges: [
             ...state.edges,
             ...remappedEdges,
           ],
+          isWorkflowDirty: true,
         };
       }),
+
+    setCurrentWorkflow: (
+      id,
+      name
+    ) =>
+      set((state) => ({
+        ...state,
+        currentWorkflowId: id,
+        currentWorkflowName: name,
+      })),
+
+    setCurrentWorkflowName: (
+      name
+    ) =>
+      set((state) => ({
+        ...state,
+        currentWorkflowName: name,
+        isWorkflowDirty: true,
+      })),
+
+    clearCurrentWorkflow: () =>
+      set((state) => ({
+        ...state,
+        currentWorkflowId: null,
+        currentWorkflowName:
+          "Untitled Workflow",
+        isWorkflowDirty: false,
+      })),
+
+    setWorkflowExecutionResult: (
+      result
+    ) =>
+      set({
+        workflowExecutionResult:
+          result,
+      }),
+
+    clearWorkflowExecutionResult: () =>
+      set({
+        workflowExecutionResult: "",
+      }),
+
+    setWorkflowDirty: (value) =>
+      set({
+        isWorkflowDirty: value,
+      }),
+
+    triggerWorkflowListRefresh: () =>
+      set((state) => ({
+        ...state,
+        workflowListRefreshKey:
+          state.workflowListRefreshKey + 1,
+      })),
   }));

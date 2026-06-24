@@ -1,9 +1,9 @@
 import { Node, Edge } from "@xyflow/react";
 
-export function saveWorkflow(
-  nodes: Node[],
-  edges: Edge[]
-) {
+export const saveWorkflow = (
+  nodes: any[],
+  edges: any[]
+) => {
   localStorage.setItem(
     "workflow",
     JSON.stringify({
@@ -11,17 +11,41 @@ export function saveWorkflow(
       edges,
     })
   );
-}
+};
 
-export function loadWorkflow() {
-  const workflow =
-    localStorage.getItem(
-      "workflow"
+export const loadWorkflow = () => {
+  const raw =
+    localStorage.getItem("workflow");
+
+  return raw
+    ? JSON.parse(raw)
+    : null;
+};
+
+export const saveCurrentWorkflowId = (
+  workflowId: number
+) => {
+  localStorage.setItem(
+    "currentWorkflowId",
+    String(workflowId)
+  );
+};
+
+export const clearCurrentWorkflowId =
+  () => {
+    localStorage.removeItem(
+      "currentWorkflowId"
     );
+  };
 
-  if (!workflow) {
-    return null;
-  }
+export const loadCurrentWorkflowId =
+  () => {
+    const raw =
+      localStorage.getItem(
+        "currentWorkflowId"
+      );
 
-  return JSON.parse(workflow);
-}
+    return raw
+      ? Number(raw)
+      : null;
+  };

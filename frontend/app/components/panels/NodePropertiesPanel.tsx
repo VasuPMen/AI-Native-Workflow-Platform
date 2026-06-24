@@ -5,7 +5,6 @@ import { useState, useEffect } from "react";
 import { useWorkflowStore } from "../../store/workflowStore";
 
 export default function NodePropertiesPanel() {
-
   const store = useWorkflowStore();
 
   useEffect(() => {
@@ -15,15 +14,16 @@ export default function NodePropertiesPanel() {
     );
   }, [store]);
 
-  const {
-    selectedNodeId,
-    selectedEdgeId,
-    nodes,
-    edges,
-    deleteNode,
-    deleteEdge,
-    updateNodeData,
-  } = store;
+const {
+  selectedNodeId,
+  selectedEdgeId,
+  nodes,
+  edges,
+  deleteNode,
+  deleteEdge,
+  updateNodeData,
+  workflowExecutionResult,
+} = store;
 
   useEffect(() => {
     console.log(
@@ -60,6 +60,9 @@ export default function NodePropertiesPanel() {
     setTemperature,
   ] = useState(0.7);
 
+  const [text, setText] =
+    useState("");
+
   useEffect(() => {
     if (!selectedNode) return;
 
@@ -69,6 +72,7 @@ export default function NodePropertiesPanel() {
         model?: string;
         prompt?: string;
         temperature?: number;
+        text?: string;
       };
 
     setNodeName(
@@ -85,6 +89,10 @@ export default function NodePropertiesPanel() {
 
     setTemperature(
       data.temperature ?? 0.7
+    );
+
+    setText(
+      data.text || ""
     );
   }, [selectedNode]);
 
@@ -170,6 +178,55 @@ export default function NodePropertiesPanel() {
     );
   }
 
+  const handleUpdateNode = () => {
+    if (selectedNode.type === "llm") {
+      updateNodeData(
+        selectedNode.id,
+        {
+          name: nodeName,
+          model,
+          prompt,
+          temperature,
+        }
+      );
+      return;
+    }
+
+    if (
+      selectedNode.type ===
+      "text_input"
+    ) {
+      updateNodeData(
+        selectedNode.id,
+        {
+          name: nodeName,
+          text,
+        }
+      );
+      return;
+    }
+
+    if (
+      selectedNode.type ===
+      "output"
+    ) {
+      updateNodeData(
+        selectedNode.id,
+        {
+          name: nodeName,
+        }
+      );
+      return;
+    }
+
+    updateNodeData(
+      selectedNode.id,
+      {
+        name: nodeName,
+      }
+    );
+  };
+
   return (
     <div
       className="
@@ -232,15 +289,15 @@ export default function NodePropertiesPanel() {
                 )
               }
               className="
-            w-full
-            p-2
-            rounded
-            border
-            border-zinc-700
-            bg-white
-            text-black
-            mb-4
-            "
+              w-full
+              p-2
+              rounded
+              border
+              border-zinc-700
+              bg-white
+              text-black
+              mb-4
+              "
             />
 
             <label className="block mb-2">
@@ -256,15 +313,15 @@ export default function NodePropertiesPanel() {
                 )
               }
               className="
-            w-full
-            p-2
-            rounded
-            border
-            border-zinc-700
-            bg-white
-            text-black
-            mb-4
-            "
+              w-full
+              p-2
+              rounded
+              border
+              border-zinc-700
+              bg-white
+              text-black
+              mb-4
+              "
             />
 
             <label className="block mb-2">
@@ -285,31 +342,81 @@ export default function NodePropertiesPanel() {
                 )
               }
               className="
-            w-full
-            p-2
-            rounded
-            border
-            border-zinc-700
-            bg-white
-            text-black
-            mb-4
-            "
+              w-full
+              p-2
+              rounded
+              border
+              border-zinc-700
+              bg-white
+              text-black
+              mb-4
+              "
             />
           </>
         )}
 
+      {selectedNode.type ===
+        "text_input" && (
+          <>
+            <label className="block mb-2">
+              Input Text
+            </label>
+
+            <textarea
+              rows={8}
+              value={text}
+              onChange={(e) =>
+                setText(
+                  e.target.value
+                )
+              }
+              className="
+              w-full
+              p-2
+              rounded
+              border
+              border-zinc-700
+              bg-white
+              text-black
+              mb-4
+              "
+            />
+          </>
+        )}
+
+        {selectedNode.type ===
+  "output" && (
+    <>
+      <label className="block mb-2">
+        Workflow Output
+      </label>
+
+      <div
+        className="
+        w-full
+        min-h-[180px]
+        max-h-[320px]
+        overflow-y-auto
+        rounded
+        border
+        border-zinc-700
+        bg-zinc-950
+        text-zinc-200
+        p-3
+        mb-4
+        whitespace-pre-wrap
+        break-words
+        "
+      >
+        {workflowExecutionResult
+          ? workflowExecutionResult
+          : "No output yet. Run the workflow to see the result here."}
+      </div>
+    </>
+  )}
+
       <button
-        onClick={() =>
-          updateNodeData(
-            selectedNode.id,
-            {
-              name: nodeName,
-              model,
-              prompt,
-              temperature,
-            }
-          )
-        }
+        onClick={handleUpdateNode}
         className="
         w-full
         bg-blue-500
@@ -338,12 +445,12 @@ export default function NodePropertiesPanel() {
               }
             }}
             className="
-    w-full
-    bg-red-500
-    hover:bg-red-600
-    p-2
-    rounded
-    "
+            w-full
+            bg-red-500
+            hover:bg-red-600
+            p-2
+            rounded
+            "
           >
             Delete Node
           </button>
