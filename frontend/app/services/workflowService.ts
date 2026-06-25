@@ -1,4 +1,5 @@
 import { api } from "../lib/api";
+import { NodeDefinition } from "../types/nodeDefinition";
 
 export const createWorkflow = async (data: any) => {
   const response = await api.post("/workflows/", data);
@@ -40,6 +41,20 @@ export const deleteWorkflow = async (
 ) => {
   const response = await api.delete(
     `/workflows/${id}`
+  );
+  return response.data;
+};
+
+export const getNodeDefinitions =
+  async (): Promise<NodeDefinition[]> => {
+    const response =
+      await api.get("/nodes/");
+    return response.data.data;
+  };
+
+export const getCredentials = async () => {
+  const response = await api.get(
+    "/credentials/"
   );
   return response.data;
 };

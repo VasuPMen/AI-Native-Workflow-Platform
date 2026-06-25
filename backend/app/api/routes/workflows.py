@@ -85,6 +85,7 @@ def get_workflow_api(
     "/{workflow_id}",
     response_model=WorkflowResponse
 )
+
 def update_workflow_api(
     workflow_id: int,
     payload: WorkflowUpdate,
@@ -125,6 +126,11 @@ def delete_workflow_api(
         "message": "Workflow deleted successfully"
     }
 
+@router.post(
+    "/{workflow_id}/execute",
+    response_model=WorkflowExecutionResponse
+)
+
 
 @router.post(
     "/{workflow_id}/execute",
@@ -145,4 +151,18 @@ def execute_workflow_api(
             detail="Workflow not found"
         )
 
-    return execute_workflow(workflow)
+    try:
+        return execute_workflow(
+            db=db,
+            workflow=workflow
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )

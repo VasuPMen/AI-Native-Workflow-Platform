@@ -1,40 +1,45 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useWorkflowStore } from "../../store/workflowStore";
+import { useNodeDefinitionsStore } from "../../store/nodeDefinitionsStore";
+import { useCredentialStore } from "../../store/credentialStore";
+
+const getDefaultModelForProvider = (
+  provider: string
+) => {
+  if (provider === "gemini") {
+    return "gemini-2.5-flash";
+  }
+
+  if (provider === "openai") {
+    return "gpt-4o-mini";
+  }
+
+  return "";
+};
 
 export default function NodePropertiesPanel() {
-  const store = useWorkflowStore();
-
-  useEffect(() => {
-    console.log(
-      "FULL STORE LIVE",
-      useWorkflowStore.getState()
-    );
-  }, [store]);
-
-const {
-  selectedNodeId,
-  selectedEdgeId,
-  nodes,
-  edges,
-  deleteNode,
-  deleteEdge,
-  updateNodeData,
-  workflowExecutionResult,
-} = store;
-
-  useEffect(() => {
-    console.log(
-      "LIVE IDS",
-      selectedNodeId,
-      selectedEdgeId
-    );
-  }, [
+  const {
     selectedNodeId,
     selectedEdgeId,
-  ]);
+    nodes,
+    edges,
+    deleteNode,
+    deleteEdge,
+    updateNodeData,
+    workflowExecutionResult,
+  } = useWorkflowStore();
+
+  const nodeDefinitions =
+    useNodeDefinitionsStore(
+      (state) => state.nodeDefinitions
+    );
+
+  const credentials = useCredentialStore(
+    (state) => state.credentials
+  );
 
   const selectedNode = nodes.find(
     (node) =>
@@ -46,55 +51,68 @@ const {
       edge.id === selectedEdgeId
   );
 
+  const selectedNodeDefinition =
+    useMemo(() => {
+      if (!selectedNode) return null;
+
+      return nodeDefinitions.find(
+        (definition) =>
+          definition.type ===
+          selectedNode.type
+      );
+    }, [
+      selectedNode,
+      nodeDefinitions,
+    ]);
+
   const [nodeName, setNodeName] =
     useState("");
 
-  const [model, setModel] =
-    useState("");
-
-  const [prompt, setPrompt] =
-    useState("");
-
-  const [
-    temperature,
-    setTemperature,
-  ] = useState(0.7);
-
-  const [text, setText] =
-    useState("");
+  const [formValues, setFormValues] =
+    useState<Record<string, any>>({});
 
   useEffect(() => {
     if (!selectedNode) return;
 
-    const data =
-      selectedNode.data as {
-        name?: string;
-        model?: string;
-        prompt?: string;
-        temperature?: number;
-        text?: string;
-      };
+    const nodeData =
+      (selectedNode.data as Record<
+        string,
+        any
+      >) || {};
 
     setNodeName(
-      data.name || ""
+      nodeData.name || ""
     );
 
-    setModel(
-      data.model || "gpt-4o"
+    const nextFormValues: Record<
+      string,
+      any
+    > = {};
+
+    selectedNodeDefinition?.config_fields?.forEach(
+      (field) => {
+        if (field.key === "label") {
+          return;
+        }
+
+        if (
+          nodeData[field.key] !==
+          undefined
+        ) {
+          nextFormValues[field.key] =
+            nodeData[field.key];
+        } else {
+          nextFormValues[field.key] =
+            field.default ?? "";
+        }
+      }
     );
 
-    setPrompt(
-      data.prompt || ""
-    );
-
-    setTemperature(
-      data.temperature ?? 0.7
-    );
-
-    setText(
-      data.text || ""
-    );
-  }, [selectedNode]);
+    setFormValues(nextFormValues);
+  }, [
+    selectedNode,
+    selectedNodeDefinition,
+  ]);
 
   if (selectedEdge) {
     return (
@@ -178,52 +196,334 @@ const {
     );
   }
 
+  const handleFieldChange = (
+    key: string,
+    value: any
+  ) => {
+    setFormValues((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+
+  const handleProviderChange = (
+    provider: string
+  ) => {
+    setFormValues((prev) => {
+      const nextValues: Record<
+        string,
+        any
+      > = {
+        ...prev,
+        provider,
+        credential_id: "",
+      };
+
+      const currentModel =
+        String(prev.model || "").trim();
+
+      const openaiModels = [
+        "gpt-4o",
+        "gpt-4o-mini",
+        "gpt-4.1",
+        "gpt-4.1-mini",
+      ];
+
+      const geminiModels = [
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+        "gemini-1.5-flash",
+        "gemini-1.5-pro",
+      ];
+
+      const currentLooksOpenAI =
+        openaiModels.includes(
+          currentModel
+        );
+
+      const currentLooksGemini =
+        geminiModels.includes(
+          currentModel
+        );
+
+      if (provider === "gemini") {
+        if (
+          !currentModel ||
+          currentLooksOpenAI
+        ) {
+          nextValues.model =
+            getDefaultModelForProvider(
+              "gemini"
+            );
+        }
+      }
+
+      if (provider === "openai") {
+        if (
+          !currentModel ||
+          currentLooksGemini
+        ) {
+          nextValues.model =
+            getDefaultModelForProvider(
+              "openai"
+            );
+        }
+      }
+
+      return nextValues;
+    });
+  };
+
   const handleUpdateNode = () => {
-    if (selectedNode.type === "llm") {
-      updateNodeData(
-        selectedNode.id,
-        {
-          name: nodeName,
-          model,
-          prompt,
-          temperature,
-        }
-      );
-      return;
-    }
-
-    if (
-      selectedNode.type ===
-      "text_input"
-    ) {
-      updateNodeData(
-        selectedNode.id,
-        {
-          name: nodeName,
-          text,
-        }
-      );
-      return;
-    }
-
-    if (
-      selectedNode.type ===
-      "output"
-    ) {
-      updateNodeData(
-        selectedNode.id,
-        {
-          name: nodeName,
-        }
-      );
-      return;
-    }
-
     updateNodeData(
       selectedNode.id,
       {
         name: nodeName,
+        ...formValues,
       }
+    );
+  };
+
+  const renderField = (
+    field: any
+  ) => {
+    if (field.key === "label") {
+      return null;
+    }
+
+    const value =
+      formValues[field.key] ?? "";
+
+    const selectedProvider =
+      formValues.provider || "";
+
+    if (
+      field.key === "credential_id"
+    ) {
+      const filteredCredentials =
+        credentials.filter(
+          (credential) =>
+            credential.provider ===
+            selectedProvider
+        );
+
+      return (
+        <div
+          key={field.key}
+          className="mb-4"
+        >
+          <label className="block mb-2">
+            {field.label}
+          </label>
+
+          <select
+            value={value}
+            onChange={(e) =>
+              handleFieldChange(
+                field.key,
+                e.target.value
+              )
+            }
+            className="
+            w-full
+            p-2
+            rounded
+            border
+            border-zinc-700
+            bg-white
+            text-black
+            "
+          >
+            <option value="">
+              Select credential
+            </option>
+
+            {filteredCredentials.map(
+              (credential) => (
+                <option
+                  key={credential.id}
+                  value={credential.id}
+                >
+                  {credential.name}
+                </option>
+              )
+            )}
+          </select>
+        </div>
+      );
+    }
+
+    if (
+      field.field_type ===
+      "textarea"
+    ) {
+      return (
+        <div  
+          key={field.key}
+          className="mb-4"
+        >
+          <label className="block mb-2">
+            {field.label}
+          </label>
+
+          <textarea
+            rows={field.key === "prompt" ? 5 : 8}
+            value={value}
+            onChange={(e) =>
+              handleFieldChange(
+                field.key,
+                e.target.value
+              )
+            }
+            placeholder={
+              field.placeholder || ""
+            }
+            className="
+            w-full
+            p-2
+            rounded
+            border
+            border-zinc-700
+            bg-white
+            text-black
+            "
+          />
+        </div>
+      );
+    }
+
+    if (
+      field.field_type ===
+      "number"
+    ) {
+      return (
+        <div
+          key={field.key}
+          className="mb-4"
+        >
+          <label className="block mb-2">
+            {field.label}
+          </label>
+
+          <input
+            type="number"
+            step="0.1"
+            value={value}
+            onChange={(e) =>
+              handleFieldChange(
+                field.key,
+                Number(
+                  e.target.value
+                )
+              )
+            }
+            placeholder={
+              field.placeholder || ""
+            }
+            className="
+            w-full
+            p-2
+            rounded
+            border
+            border-zinc-700
+            bg-white
+            text-black
+            "
+          />
+        </div>
+      );
+    }
+
+    if (
+      field.field_type ===
+      "select"
+    ) {
+      return (
+        <div
+          key={field.key}
+          className="mb-4"
+        >
+          <label className="block mb-2">
+            {field.label}
+          </label>
+
+          <select
+            value={value}
+            onChange={(e) => {
+              const nextValue =
+                e.target.value;
+
+              if (field.key === "provider") {
+                handleProviderChange(
+                  nextValue
+                );
+                return;
+              }
+
+              handleFieldChange(
+                field.key,
+                nextValue
+              );
+            }}
+            className="
+            w-full
+            p-2
+            rounded
+            border
+            border-zinc-700
+            bg-white
+            text-black
+            "
+          >
+            {(field.options || []).map(
+              (
+                option: string
+              ) => (
+                <option
+                  key={option}
+                  value={option}
+                >
+                  {option}
+                </option>
+              )
+            )}
+          </select>
+        </div>
+      );
+    }
+
+    return (
+      <div
+        key={field.key}
+        className="mb-4"
+      >
+        <label className="block mb-2">
+          {field.label}
+        </label>
+
+        <input
+          type="text"
+          value={value}
+          onChange={(e) =>
+            handleFieldChange(
+              field.key,
+              e.target.value
+            )
+          }
+          placeholder={
+            field.placeholder || ""
+          }
+          className="
+          w-full
+          p-2
+          rounded
+          border
+          border-zinc-700
+          bg-white
+          text-black
+          "
+        />
+      </div>
     );
   };
 
@@ -274,146 +574,40 @@ const {
         {selectedNode.type}
       </p>
 
-      {selectedNode.type ===
-        "llm" && (
-          <>
-            <label className="block mb-2">
-              Model
-            </label>
-
-            <input
-              value={model}
-              onChange={(e) =>
-                setModel(
-                  e.target.value
-                )
-              }
-              className="
-              w-full
-              p-2
-              rounded
-              border
-              border-zinc-700
-              bg-white
-              text-black
-              mb-4
-              "
-            />
-
-            <label className="block mb-2">
-              Prompt
-            </label>
-
-            <textarea
-              rows={5}
-              value={prompt}
-              onChange={(e) =>
-                setPrompt(
-                  e.target.value
-                )
-              }
-              className="
-              w-full
-              p-2
-              rounded
-              border
-              border-zinc-700
-              bg-white
-              text-black
-              mb-4
-              "
-            />
-
-            <label className="block mb-2">
-              Temperature
-            </label>
-
-            <input
-              type="number"
-              step="0.1"
-              min="0"
-              max="2"
-              value={temperature}
-              onChange={(e) =>
-                setTemperature(
-                  Number(
-                    e.target.value
-                  )
-                )
-              }
-              className="
-              w-full
-              p-2
-              rounded
-              border
-              border-zinc-700
-              bg-white
-              text-black
-              mb-4
-              "
-            />
-          </>
-        )}
+      {selectedNodeDefinition?.config_fields?.map(
+        renderField
+      )}
 
       {selectedNode.type ===
-        "text_input" && (
+        "output" && (
           <>
             <label className="block mb-2">
-              Input Text
+              Workflow Output
             </label>
 
-            <textarea
-              rows={8}
-              value={text}
-              onChange={(e) =>
-                setText(
-                  e.target.value
-                )
-              }
+            <div
               className="
               w-full
-              p-2
+              min-h-[180px]
+              max-h-[320px]
+              overflow-y-auto
               rounded
               border
               border-zinc-700
-              bg-white
-              text-black
+              bg-zinc-950
+              text-zinc-200
+              p-3
               mb-4
+              whitespace-pre-wrap
+              break-words
               "
-            />
+            >
+              {workflowExecutionResult
+                ? workflowExecutionResult
+                : "No output yet. Run the workflow to see the result here."}
+            </div>
           </>
         )}
-
-        {selectedNode.type ===
-  "output" && (
-    <>
-      <label className="block mb-2">
-        Workflow Output
-      </label>
-
-      <div
-        className="
-        w-full
-        min-h-[180px]
-        max-h-[320px]
-        overflow-y-auto
-        rounded
-        border
-        border-zinc-700
-        bg-zinc-950
-        text-zinc-200
-        p-3
-        mb-4
-        whitespace-pre-wrap
-        break-words
-        "
-      >
-        {workflowExecutionResult
-          ? workflowExecutionResult
-          : "No output yet. Run the workflow to see the result here."}
-      </div>
-    </>
-  )}
 
       <button
         onClick={handleUpdateNode}

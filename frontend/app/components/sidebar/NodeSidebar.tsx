@@ -1,11 +1,47 @@
 "use client";
 
-import { useWorkflowStore } from "../../store/workflowStore";
+import { useEffect } from "react";
 
-export default function NodeSidebar() {
+import { useWorkflowStore } from "../../store/workflowStore";
+import { useNodeDefinitionsStore } from "../../store/nodeDefinitionsStore";
+import { NodeDefinition } from "../../types/nodeDefinition";
+
+interface NodeSidebarProps {
+  nodeDefinitions: NodeDefinition[];
+}
+
+export default function NodeSidebar({
+  nodeDefinitions,
+}: NodeSidebarProps) {
   const addNode = useWorkflowStore(
     (state) => state.addNode
   );
+
+  const setNodeDefinitions =
+    useNodeDefinitionsStore(
+      (state) => state.setNodeDefinitions
+    );
+
+  useEffect(() => {
+    setNodeDefinitions(nodeDefinitions);
+  }, [nodeDefinitions, setNodeDefinitions]);
+
+  const buildInitialNodeData = (
+    node: NodeDefinition
+  ) => {
+    const data: Record<string, any> = {
+      name: node.label,
+    };
+
+    node.config_fields.forEach(
+      (field) => {
+        data[field.key] =
+          field.default ?? "";
+      }
+    );
+
+    return data;
+  };
 
   return (
     <div
@@ -23,71 +59,29 @@ export default function NodeSidebar() {
       </h2>
 
       <div className="space-y-3">
-        <button
-          onClick={() => addNode("start")}
-          className="
-          w-full
-          bg-zinc-800
-          hover:bg-zinc-700
-          text-white
-          px-4
-          py-2
-          rounded
-          text-left
-          "
-        >
-          Add Start Node
-        </button>
-
-        <button
-          onClick={() => addNode("llm")}
-          className="
-          w-full
-          bg-zinc-800
-          hover:bg-zinc-700
-          text-white
-          px-4
-          py-2
-          rounded
-          text-left
-          "
-        >
-          Add LLM Node
-        </button>
-
-        <button
-          onClick={() =>
-            addNode("text_input")
-          }
-          className="
-          w-full
-          bg-zinc-800
-          hover:bg-zinc-700
-          text-white
-          px-4
-          py-2
-          rounded
-          text-left
-          "
-        >
-          Add Text Input Node
-        </button>
-
-        <button
-          onClick={() => addNode("output")}
-          className="
-          w-full
-          bg-zinc-800
-          hover:bg-zinc-700
-          text-white
-          px-4
-          py-2
-          rounded
-          text-left
-          "
-        >
-          Add Output Node
-        </button>
+        {nodeDefinitions.map((node) => (
+          <button
+            key={node.type}
+            onClick={() =>
+              addNode(
+                node.type,
+                buildInitialNodeData(node)
+              )
+            }
+            className="
+            w-full
+            bg-zinc-800
+            hover:bg-zinc-700
+            text-white
+            px-4
+            py-2
+            rounded
+            text-left
+            "
+          >
+            Add {node.label} Node
+          </button>
+        ))}
       </div>
     </div>
   );

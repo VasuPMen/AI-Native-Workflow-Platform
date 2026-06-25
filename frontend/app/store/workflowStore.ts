@@ -48,9 +48,10 @@ interface WorkflowStore {
     connection: Connection
   ) => void;
 
-  addNode: (
-    type: string
-  ) => void;
+addNode: (
+  type: string,
+  initialData?: Record<string, any>
+) => void;
 
   setSelectedNodeId: (
     nodeId: string | null
@@ -175,61 +176,54 @@ export const useWorkflowStore =
         };
       }),
 
-    addNode: (type) =>
-      set((state) => {
-        if (
-          type === "start" &&
-          state.nodes.some(
-            (node) =>
-              node.type === "start"
-          )
-        ) {
-          alert(
-            "Only one Start Node is allowed"
-          );
-          return state;
-        }
+addNode: (
+  type,
+  initialData = {}
+) =>
+  set((state) => {
+    if (
+      type === "start" &&
+      state.nodes.some(
+        (node) =>
+          node.type === "start"
+      )
+    ) {
+      alert(
+        "Only one Start Node is allowed"
+      );
+      return state;
+    }
 
-        return {
-          ...state,
-          nodes: [
-            ...state.nodes,
-            {
-              id: crypto.randomUUID(),
-              type,
-              position: {
-                x:
-                  200 +
-                  state.nodes.length * 50,
-                y:
-                  200 +
-                  state.nodes.length * 50,
-              },
-              data:
-                type === "llm"
-                  ? {
-                      name: "LLM Node",
-                      model: "gpt-4o",
-                      prompt: "",
-                      temperature: 0.7,
-                    }
-                  : type === "text_input"
-                    ? {
-                        name: "Text Input",
-                        text: "",
-                      }
-                    : type === "output"
-                      ? {
-                          name: "Output Node",
-                        }
-                      : {
-                          name: "Start Node",
-                        },
-            },
-          ],
-          isWorkflowDirty: true,
-        };
-      }),
+    const defaultName =
+      initialData.name ||
+      (type === "start"
+        ? "Start Node"
+        : "Untitled Node");
+
+    return {
+      ...state,
+      nodes: [
+        ...state.nodes,
+        {
+          id: crypto.randomUUID(),
+          type,
+          position: {
+            x:
+              200 +
+              state.nodes.length * 50,
+            y:
+              200 +
+              state.nodes.length * 50,
+          },
+          data: {
+            name: defaultName,
+            ...initialData,
+          },
+        },
+      ],
+      isWorkflowDirty: true,
+    };
+  }),
 
     setSelectedNodeId: (
       nodeId

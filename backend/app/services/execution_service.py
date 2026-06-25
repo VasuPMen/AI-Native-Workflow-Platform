@@ -1,16 +1,10 @@
-import os
-
 import google.generativeai as genai
 
-from dotenv import load_dotenv
+from openai import OpenAI
+from sqlalchemy.orm import Session
 
 from app.models.workflow import Workflow
-
-load_dotenv()
-
-genai.configure(
-    api_key=os.getenv("GEMINI_API_KEY")
-)
+from app.services.credential_service import get_credential
 
 
 def build_execution_order(nodes, edges):
@@ -58,19 +52,153 @@ def build_execution_order(nodes, edges):
     return execution_order
 
 
-def call_gemini(prompt: str):
-    model = genai.GenerativeModel(
-        "models/gemini-2.5-flash"
+def call_openai(
+    api_key: str,
+    model: str,
+    prompt: str,
+    temperature: float
+):
+    client = OpenAI(
+        api_key=api_key
     )
 
-    response = model.generate_content(
+    response = client.chat.completions.create(
+        model=model,
+        temperature=temperature,
+        messages=[
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
+    )
+
+    return response.choices[0].message.content
+
+
+def call_gemini(
+    api_key: str,
+    model: str,
+    prompt: str
+):
+    genai.configure(
+        api_key=api_key
+    )
+
+    gemini_model = genai.GenerativeModel(
+        model
+    )
+
+    response = gemini_model.generate_content(
         prompt
     )
 
     return response.text
 
 
-def execute_node(node, previous_output):
+def run_llm_node(
+    db: Session,
+    node_data: dict,
+    previous_output
+):
+    provider = str(
+        node_data.get("provider", "")
+    ).strip().lower()
+
+    credential_id = node_data.get(
+        "credential_id"
+    )
+
+    model = str(
+        node_data.get("model", "")
+    ).strip()
+
+    prompt = str(
+        node_data.get("prompt", "")
+    ).strip()
+
+    temperature = node_data.get(
+        "temperature",
+        0.7
+    )
+
+    if not provider:
+        raise ValueError(
+            "Provider is required for LLM node"
+        )
+
+    if not credential_id:
+        raise ValueError(
+            "Credential is required for LLM node"
+        )
+
+    if not model:
+        raise ValueError(
+            "Model is required for LLM node"
+        )
+
+    if not prompt:
+        raise ValueError(
+            "Prompt is required for LLM node"
+        )
+
+    credential = get_credential(
+        db=db,
+        credential_id=int(credential_id),
+        user_id=1
+    )
+
+    if credential is None:
+        raise ValueError(
+            "Selected credential not found"
+        )
+
+    credential_provider = (
+        credential.provider
+        .strip()
+        .lower()
+    )
+
+    if credential_provider != provider:
+        raise ValueError(
+            "Credential provider does not match selected LLM provider"
+        )
+
+    api_key = credential.secret
+    input_text = previous_output or ""
+
+    full_prompt = f"""
+{prompt}
+
+Input:
+{input_text}
+"""
+
+    if provider == "openai":
+        return call_openai(
+            api_key=api_key,
+            model=model,
+            prompt=full_prompt,
+            temperature=temperature
+        )
+
+    if provider == "gemini":
+        return call_gemini(
+            api_key=api_key,
+            model=model,
+            prompt=full_prompt
+        )
+
+    raise ValueError(
+        f"Unsupported provider: {provider}"
+    )
+
+
+def execute_node(
+    db: Session,
+    node,
+    previous_output
+):
     node_type = node.get("type")
     node_data = node.get("data", {})
 
@@ -81,17 +209,11 @@ def execute_node(node, previous_output):
         return node_data.get("text", "")
 
     if node_type == "llm":
-        prompt = node_data.get("prompt", "")
-        input_text = previous_output or ""
-
-        full_prompt = f"""
-{prompt}
-
-Input:
-{input_text}
-"""
-
-        return call_gemini(full_prompt)
+        return run_llm_node(
+            db=db,
+            node_data=node_data,
+            previous_output=previous_output
+        )
 
     if node_type == "output":
         return previous_output
@@ -99,7 +221,10 @@ Input:
     return previous_output
 
 
-def execute_workflow(workflow: Workflow):
+def execute_workflow(
+    db: Session,
+    workflow: Workflow
+):
     workflow_json = workflow.workflow_json or {}
 
     nodes = workflow_json.get("nodes", [])
@@ -115,8 +240,9 @@ def execute_workflow(workflow: Workflow):
 
     for node in execution_order:
         output = execute_node(
-            node,
-            previous_output
+            db=db,
+            node=node,
+            previous_output=previous_output
         )
 
         node_outputs[node["id"]] = {

@@ -1,24 +1,37 @@
 "use client";
 
-import { Handle, Position } from "@xyflow/react";
+import {
+  Handle,
+  Position,
+} from "@xyflow/react";
 
-export default function TextInputNode({
-  data,
-}: {
+interface TextInputNodeProps {
   data: {
     name?: string;
     text?: string;
   };
-}) {
-  const previewText = data.text
-    ? data.text.length > 60
-      ? data.text.slice(0, 60) + "..."
-      : data.text
+  selected?: boolean;
+}
+
+export default function TextInputNode({
+  data,
+  selected,
+}: TextInputNodeProps) {
+  const nodeName =
+    data?.name || "Text Input";
+
+  const text =
+    data?.text?.trim() || "";
+
+  const previewText = text
+    ? text.length > 60
+      ? text.slice(0, 60) + "..."
+      : text
     : "No input text added";
 
   return (
     <div
-      className="
+      className={`
       bg-zinc-900
       border
       border-blue-500
@@ -28,10 +41,15 @@ export default function TextInputNode({
       min-w-[220px]
       max-w-[260px]
       shadow-lg
-      "
+      ${
+        selected
+          ? "ring-4 ring-yellow-400"
+          : ""
+      }
+      `}
     >
       <div className="text-white font-semibold">
-        {data.name || "Text Input"}
+        {nodeName}
       </div>
 
       <div className="text-zinc-400 text-xs mt-1">

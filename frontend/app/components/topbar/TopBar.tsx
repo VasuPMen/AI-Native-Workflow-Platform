@@ -228,32 +228,93 @@ export default function TopBar() {
       resetCanvasToNewWorkflow();
     };
 
-  const runWorkflow = async () => {
-    try {
-      if (!currentWorkflowId) {
-        alert(
-          "Please save the workflow before running it"
+const runWorkflow = async () => {
+  try {
+    let workflowId = currentWorkflowId;
+
+    if (isWorkflowDirty || !workflowId) {
+      if (workflowId) {
+        const updatedWorkflow =
+          await updateWorkflow(workflowId, {
+            name: currentWorkflowName,
+            description: "",
+            workflow_json: {
+              nodes,
+              edges,
+            },
+          });
+
+        workflowId = updatedWorkflow.id;
+
+        setCurrentWorkflow(
+          updatedWorkflow.id,
+          updatedWorkflow.name
         );
-        return;
+
+        saveCurrentWorkflowId(
+          updatedWorkflow.id
+        );
+      } else {
+        const createdWorkflow =
+          await createWorkflow({
+            name: currentWorkflowName,
+            description: "",
+            workflow_json: {
+              nodes,
+              edges,
+            },
+          });
+
+        workflowId = createdWorkflow.id;
+
+        setCurrentWorkflow(
+          createdWorkflow.id,
+          createdWorkflow.name
+        );
+
+        saveCurrentWorkflowId(
+          createdWorkflow.id
+        );
       }
 
-      const result =
-        await executeWorkflow(
-          currentWorkflowId
-        );
-
-      setRunResult(result);
-
-      setWorkflowExecutionResult(
-        result?.final_output || ""
-      );
-
-      setShowRunResult(true);
-    } catch (error) {
-      console.error(error);
-      alert("Failed to run workflow");
+      setWorkflowDirty(false);
+      triggerWorkflowListRefresh();
     }
-  };
+
+    if (!workflowId) {
+      alert(
+        "Failed to prepare workflow for execution"
+      );
+      return;
+    }
+
+    clearWorkflowExecutionResult();
+
+    const result =
+      await executeWorkflow(workflowId);
+
+    setRunResult(result);
+
+    setWorkflowExecutionResult(
+      result?.final_output || ""
+    );
+
+    setShowRunResult(true);
+  } catch (error: any) {
+    console.error(error);
+
+    const backendMessage =
+      error?.response?.data?.detail;
+
+    if (backendMessage) {
+      alert(backendMessage);
+      return;
+    }
+
+    alert("Failed to run workflow");
+  }
+};
+
 
   const exportWorkflow = () => {
     const result =
@@ -443,7 +504,9 @@ export default function TopBar() {
             rounded
             "
           >
-            Run
+            {isWorkflowDirty || !currentWorkflowId
+              ? "Save & Run"
+              : "Run"}
           </button>
 
           <button
